@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSupabaseAdmin, getSupabasePublic } from "@/lib/supabase";
+
+const contentSchema = z.object({
+  content_type: z.enum(["tutorial", "fbc_book", "shout_out"]),
+  title: z.string().trim().min(1),
+  slug: z.string().trim().min(1),
+  short_description: z.string().optional(),
+  type_data: z.record(z.string(), z.unknown()).default({}),
+  visibility: z.enum(["public", "link_only"]).default("public"),
+});
+
+export async function POST(request: Request) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const publicClient = getSupabasePublic();
+  const adminClient = getSupabaseAdmin();
+  if (!publicClient || !adminClient) return NextResponse.json({ error: "Admin service is not configured" }, { status: 503 });
+  const { data: auth, error: authError } = await publicClient.auth.getUser(token);
+  if (authError || !auth.user) return NextResponse.json({ error: "Invalid authentication" }, { status: 401 });
+  const parsed = contentSchema.safeParse(await request.json());
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const input = parsed.data;
+  if (input.content_type === "shout_out" && input.type_data.permission_confirmed !== true) return NextResponse.json({ error: "Shout Outs require permission confirmation" }, { status: 400 });
+  const { data, error } = await adminClient.from("content_items").insert({ ...input, created_by: auth.user.id }).select("id").single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data }, { status: 201 });
+}
