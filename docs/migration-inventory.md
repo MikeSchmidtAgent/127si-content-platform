@@ -35,3 +35,7 @@ The migration must be safe to rerun and must upsert using the Airtable source re
 ## Phase 0 rule
 
 Do not modify Airtable during inventory or migration. Download important attachments into durable storage before relying on Airtable attachment URLs.
+
+## Import utility
+
+Use `scripts/import-airtable.mjs` for the controlled migration. It defaults to a dry run, imports only Tutorial, FBC Book, and Shout Out records, upserts by Airtable record ID, and writes a reconciliation file. See [airtable-import.md](./airtable-import.md).

@@ -1,32 +1,35 @@
 # Content API v1
 
-## Published content list
+The public API is read-only and returns published content only. It is intended for Challenge-Platform and other consumer apps.
 
-`GET /api/v1/content`
+Base URL (local): `http://localhost:3000/api/v1`
 
-Query parameters:
+## List published content
 
-- `type`
-- `challenge_id`
-- `page`
-- `page_size`
+`GET /content`
 
-Only published content is returned. Draft, unpublished, and removed records are never exposed through the public read API.
+Optional query parameters: `type` (`tutorial`, `fbc_book`, `shout_out`), `challenge_id`, `page` (default `1`), and `page_size` (`1`–`50`, default `20`).
 
-## Published content item
+Results are ordered newest published first, with the content ID as a stable tie-breaker.
 
-`GET /api/v1/content/:id`
+```json
+{
+  "data": [],
+  "pagination": {
+    "page": 1, "page_size": 20, "total": 0, "total_pages": 0,
+    "has_next_page": false, "has_previous_page": false
+  }
+}
+```
 
-The permanent content ID is authoritative. A readable slug may be used by a future public page, but it is not required by the API.
+`data` contains the stable content ID, type, title/description fields, revision metadata, challenge references, and type-specific data.
 
-## Response requirements
+## Get one published item
 
-- Stable content ID
-- Content type
-- Title and descriptions
-- Published revision number
-- Media metadata
-- Challenge references
-- Athlete snapshot fields when applicable
-- Pagination metadata for list responses
-- Cache headers for published responses
+`GET /content/:id` returns `{ "data": { ... } }`. An unpublished, draft, removed, or unknown ID returns `404` with `{ "error": "Content not found" }`.
+
+## Errors and caching
+
+`400` means an invalid filter, `404` means not found, `500` means a temporary service failure, and `503` means the service is not configured. Errors use `{ "error": "..." }`; internal database details are not exposed.
+
+Published responses include `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`.

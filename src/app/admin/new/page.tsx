@@ -1,37 +1,30 @@
 "use client";
-
 import { FormEvent, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
 export default function NewContentPage() {
-  const [type, setType] = useState("shout_out");
-  const [message, setMessage] = useState("");
+  const [type, setType] = useState("shout_out"); const [message, setMessage] = useState(""); const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("Saving...");
-    const values = new FormData(event.currentTarget);
-    const { data: sessionData } = await getSupabaseBrowser().auth.getSession();
+    event.preventDefault(); const values = new FormData(event.currentTarget); const title = String(values.get("title") ?? "").trim(); const description = String(values.get("description") ?? "").trim();
+    if (!title) return setMessage("Please add a title."); if (!description) return setMessage("Please add a short description.");
+    if (type === "tutorial" && !String(values.get("instructions") ?? "").trim()) return setMessage("Please add the tutorial instructions.");
+    if (type === "fbc_book" && !String(values.get("reading") ?? "").trim()) return setMessage("Please add the reading or excerpt.");
+    if (type === "shout_out" && (!String(values.get("athlete") ?? "").trim() || !String(values.get("story") ?? "").trim())) return setMessage("Please add the athlete name and achievement story.");
+    setSaving(true); setMessage("Saving draft..."); const { data: sessionData } = await (getSupabaseBrowser().auth as any).getSession();
     if (!sessionData.session) { window.location.href = "/admin/login"; return; }
-    const title = String(values.get("title") ?? "").trim();
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `content-${Date.now()}`;
-    const typeData = type === "shout_out" ? { athlete_name: String(values.get("athlete") ?? "").trim(), story: String(values.get("story") ?? "").trim(), permission_confirmed: values.get("permission_confirmed") === "on" } : {};
-    const response = await fetch("/api/admin/content", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` }, body: JSON.stringify({ content_type: type, title, slug, short_description: String(values.get("description") ?? "").trim(), type_data: typeData, visibility: "public" }) });
-    const result = await response.json();
-    setMessage(response.ok ? "Draft saved." : result.error ?? "Could not save this item.");
+    const typeData = type === "shout_out" ? { athlete_name: String(values.get("athlete") ?? "").trim(), story: String(values.get("story") ?? "").trim(), permission_confirmed: values.get("permission_confirmed") === "on" } : type === "tutorial" ? { instructions: String(values.get("instructions") ?? "").trim(), skill_focus: String(values.get("skill_focus") ?? "").trim(), level: String(values.get("level") ?? "").trim() } : { reading: String(values.get("reading") ?? "").trim(), author: String(values.get("author") ?? "").trim(), reading_time: String(values.get("reading_time") ?? "").trim() };
+    const response = await fetch("/api/admin/content", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` }, body: JSON.stringify({ content_type: type, title, slug, short_description: description, type_data: typeData, visibility: "public" }) }); const result = await response.json();
+    if (!response.ok) { setSaving(false); setMessage(result.error ?? "Could not save this item."); return; }
+    const file = values.get("file"); if (file instanceof File && file.size > 0) { setMessage("Draft saved. Uploading media..."); const media = new FormData(); media.append("file", file); const mediaResponse = await fetch(`/api/admin/content/${result.data.id}/media`, { method: "POST", headers: { Authorization: `Bearer ${sessionData.session.access_token}` }, body: media }); const mediaResult = await mediaResponse.json(); if (!mediaResponse.ok) { setSaving(false); setMessage(`Draft saved, but media upload failed: ${mediaResult.error ?? "unknown error"}`); return; } }
+    setSaving(false); setMessage("Draft saved successfully. You can create another item or return to the admin list."); event.currentTarget.reset(); setType("shout_out");
   }
-  return <main className="shell">
-    <nav className="nav"><div className="brand">127SI ADMIN</div><a href="/admin">Back</a></nav>
-    <section className="hero">
-      <div className="eyebrow">New content</div><h1>Add something in minutes.</h1>
-      <form onSubmit={submit} style={{display:"grid", gap:16, maxWidth:720}}>
-        <label>Content type<select value={type} onChange={e=>setType(e.target.value)} style={{display:"block", width:"100%", padding:12, marginTop:6}}><option value="shout_out">Shout Out</option><option value="tutorial">Tutorial</option><option value="fbc_book">FBC Book reading</option></select></label>
-        <label>Title<input required name="title" placeholder="Night Shooting" style={{display:"block", width:"100%", padding:12, marginTop:6}} /></label>
-        <label>Short description<textarea name="description" rows={3} placeholder="What is this about?" style={{display:"block", width:"100%", padding:12, marginTop:6}} /></label>
-        {type === "shout_out" && <><label>Athlete name<input name="athlete" placeholder="Full athlete name" style={{display:"block", width:"100%", padding:12, marginTop:6}} /></label><label>Achievement story<textarea name="story" rows={5} placeholder="What did the athlete accomplish?" style={{display:"block", width:"100%", padding:12, marginTop:6}} /></label><label><input name="permission_confirmed" type="checkbox" required /> Permission confirmed</label></>}
-        <label>Media<input type="file" accept="image/*,video/*,.pdf" style={{display:"block", marginTop:8}} /></label>
-        <button className="button" type="submit" style={{border:0, cursor:"pointer", width:"fit-content"}}>Save draft</button>
-        {message && <p className="muted">{message}</p>}
-      </form>
-    </section>
-  </main>;
+  const input = { display: "block", width: "100%", padding: 12, marginTop: 6 } as const;
+  return <main className="shell"><nav className="nav"><div className="brand">127SI ADMIN</div><a href="/admin">Back</a></nav><section className="hero"><div className="eyebrow">New content</div><h1>Add something in minutes.</h1><p className="muted">Required fields are checked before anything is saved.</p><form onSubmit={submit} style={{display:"grid", gap:16, maxWidth:720}}>
+    <label>Content type<select value={type} onChange={e=>setType(e.target.value)} style={input}><option value="shout_out">Shout Out</option><option value="tutorial">Tutorial</option><option value="fbc_book">FBC Book reading</option></select></label><label>Title<input required name="title" placeholder="Night Shooting" style={input} /></label><label>Short description<textarea required name="description" rows={3} placeholder="What is this about?" style={input} /></label>
+    {type === "shout_out" && <><label>Athlete name<input required name="athlete" placeholder="Full athlete name" style={input} /></label><label>Achievement story<textarea required name="story" rows={5} placeholder="What did the athlete accomplish?" style={input} /></label><label><input name="permission_confirmed" type="checkbox" required /> Permission confirmed</label></>}
+    {type === "tutorial" && <><label>Instructions<textarea required name="instructions" rows={7} placeholder="Explain the drill or skill step by step." style={input} /></label><label>Skill focus<input name="skill_focus" placeholder="Shooting footwork" style={input} /></label><label>Level<select name="level" defaultValue="all" style={input}><option value="all">All levels</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label></>}
+    {type === "fbc_book" && <><label>Reading or excerpt<textarea required name="reading" rows={8} placeholder="Paste the reading, lesson, or book excerpt." style={input} /></label><label>Author<input name="author" placeholder="Author name" style={input} /></label><label>Reading time<input name="reading_time" placeholder="5 minutes" style={input} /></label></>}
+    <label>Media<input name="file" type="file" accept="image/*,video/*,.pdf" style={{display:"block", marginTop:8}} /></label><button className="button" type="submit" disabled={saving} style={{border:0, cursor:saving ? "wait" : "pointer", width:"fit-content", opacity:saving ? .65 : 1}}>{saving ? "Saving..." : "Save draft"}</button>{message && <p className="muted">{message}</p>}
+  </form></section></main>;
 }
