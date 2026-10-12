@@ -11,6 +11,7 @@
     "test": "node --experimental-strip-types --test tests/content-api.test.ts"
   },
   "dependencies": {
+    "@127si/admin-design-system": "github:Schmidt127/127si-admin-design-system#master",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.57.4",
     "next": "^15.3.3",

@@ -1,4 +1,5 @@
-:root { --navy:#102a43; --blue:#1f4e79; --orange:#e8752a; --ink:#243b53; --muted:#627d98; --wash:#f6f8fb; --line:#d9e2ec; }
+@import "@127si/admin-design-system/tokens.css";
+:root { --navy:var(--127si-navy); --blue:var(--127si-blue); --orange:var(--127si-orange); --ink:var(--127si-ink); --muted:var(--127si-muted); --wash:var(--127si-wash); --line:var(--127si-line); }
 * { box-sizing:border-box; }
 body { margin:0; color:var(--ink); background:var(--wash); font-family:Arial, sans-serif; }
 a { color:inherit; text-decoration:none; }
