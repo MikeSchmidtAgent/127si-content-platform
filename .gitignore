@@ -7,3 +7,5 @@ out/
 coverage/
 dist/
 *.log
+
+.vercel
