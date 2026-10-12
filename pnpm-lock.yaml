@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@127si/admin-design-system':
         specifier: github:Schmidt127/127si-admin-design-system#master
-        version: https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/ff6fb2dfcb755d6228980008318e287d66c21b31(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/4b2617fb685fb60b94423caf7ebd520fe7cd3530(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@supabase/ssr':
         specifier: ^0.6.1
         version: 0.6.1(@supabase/supabase-js@2.117.3)
@@ -51,8 +51,8 @@ importers:
 
 packages:
 
-  '@127si/admin-design-system@https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/ff6fb2dfcb755d6228980008318e287d66c21b31':
-    resolution: {tarball: https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/ff6fb2dfcb755d6228980008318e287d66c21b31}
+  '@127si/admin-design-system@https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/4b2617fb685fb60b94423caf7ebd520fe7cd3530':
+    resolution: {tarball: https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/4b2617fb685fb60b94423caf7ebd520fe7cd3530}
     version: 0.1.0
     peerDependencies:
       react: '>=18'
@@ -1684,7 +1684,7 @@ packages:
 
 snapshots:
 
-  '@127si/admin-design-system@https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/ff6fb2dfcb755d6228980008318e287d66c21b31(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@127si/admin-design-system@https://codeload.github.com/Schmidt127/127si-admin-design-system/tar.gz/4b2617fb685fb60b94423caf7ebd520fe7cd3530(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
