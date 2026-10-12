@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getSupabaseAdmin, getSupabasePublic } from "@/lib/supabase";
+
+const editSchema = z.object({
+  content_type: z.enum(["tutorial", "fbc_book", "shout_out"]),
+  title: z.string().trim().min(1),
+  slug: z.string().trim().min(1),
+  short_description: z.string().optional(),
+  type_data: z.record(z.string(), z.unknown()).default({}),
+  visibility: z.enum(["public", "link_only"]).default("public"),
+});
 
 async function authorized(request: Request) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
@@ -14,6 +24,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const client = await authorized(request);
   if (!client) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const { id } = await params; const body = await request.json();
+  if (body.status === undefined) {
+    const parsed = editSchema.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    if (parsed.data.content_type === "shout_out" && parsed.data.type_data.permission_confirmed !== true) {
+      return NextResponse.json({ error: "Shout Outs require permission confirmation" }, { status: 400 });
+    }
+    const { data, error } = await client.from("content_items").update({ ...parsed.data, status: "draft", updated_at: new Date().toISOString() }).eq("id", id).select("id, content_type, title, slug, short_description, type_data, status, visibility, updated_at").single();
+    if (error) return NextResponse.json({ error: error.message }, { status: error.code === "PGRST116" ? 404 : 500 });
+    return NextResponse.json({ data });
+  }
   const status = body.status === "published" ? "published" : body.status === "unpublished" ? "unpublished" : "draft";
   if (status === "published") {
     const { data: item, error: itemError } = await client.from("content_items").select("id, content_type, title, slug, short_description, long_description, rationale, type_data, visibility").eq("id", id).single();
@@ -25,4 +45,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { error } = await client.from("content_items").update({ status, published_at: status === "published" ? new Date().toISOString() : null }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const client = await authorized(request);
+  if (!client) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const { id } = await params;
+  const { data, error } = await client.from("content_items").select("id, content_type, title, slug, short_description, type_data, status, visibility, updated_at").eq("id", id).single();
+  if (error || !data) return NextResponse.json({ error: error?.message ?? "Content not found" }, { status: 404 });
+  return NextResponse.json({ data });
 }

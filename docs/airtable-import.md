@@ -46,3 +46,7 @@ node scripts/import-airtable.mjs --execute --publish
 ```
 
 The importer stores the original Airtable fields, athlete/challenge values, and attachment metadata in `content_items.type_data`. It does not modify Airtable and does not delete or overwrite media files. Attachment downloading and Supabase Storage wiring remain a separate migration step so the first import can be audited safely.
+
+When content is published, the public API reads the published revision snapshot, not the changing draft fields. Linked media is returned with a relative `public_url` for the public `content-media` bucket. The current MVP bucket is intentionally public for simple Challenge-Platform delivery; do not place unpublished or sensitive files in it. A future private-media phase can switch to signed URLs and a private bucket without changing content records.
+
+Imported and uploaded files belong in `media_assets`, which is the reusable asset library. Use `asset_kind` values `image`, `video`, `document`, or `file`; keep source-specific details in `metadata`, and use `tags` for browsing labels. Link an asset to content through `content_media` rather than duplicating the asset record.

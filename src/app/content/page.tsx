@@ -1,10 +1,13 @@
-import { getSupabasePublic } from "@/lib/supabase";
-
-type PublishedContent = { id: string; title: string; content_type: string; short_description: string | null };
-
-export default async function ContentPage() {
-  const supabase = getSupabasePublic();
-  const { data } = supabase ? await supabase.from("published_content").select("id,title,content_type,short_description").order("published_at", { ascending:false }) : { data:null };
-  const items = (data ?? []) as PublishedContent[];
-  return <main className="shell"><nav className="nav"><div className="brand">127SI CONTENT</div><a href="/">Home</a></nav><section className="hero"><div className="eyebrow">Published content</div><h1>Resources for the work.</h1><p className="muted">This page will display published content from the Content Platform.</p>{items.length ? <div className="grid">{items.map((item) => <article className="card" key={item.id}><div className="eyebrow">{item.content_type}</div><h2>{item.title}</h2><p className="muted">{item.short_description}</p></article>)}</div> : <p className="muted">No published content is connected yet. The Airtable migration will populate this view.</p>}</section></main>;
+"use client";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+type Media = { public_url?: string; url?: string; media_type?: string; mime_type?: string; filename?: string; alt_text?: string };
+type Item = { id: string; title: string; content_type: "tutorial" | "fbc_book" | "shout_out"; short_description?: string | null; description?: string | null; media?: Media[] | null };
+const labels = { all: "All content", tutorial: "Tutorials", fbc_book: "FBC Book", shout_out: "Shout Outs" } as const;
+export default function ContentPage() {
+  const [items, setItems] = useState<Item[]>([]); const [filter, setFilter] = useState<keyof typeof labels>("all"); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  useEffect(() => { fetch("/api/v1/content?page_size=50").then(async (r) => { if (!r.ok) throw new Error("Content is temporarily unavailable."); return r.json(); }).then((r) => setItems(r.data ?? [])).catch((e) => setError(e instanceof Error ? e.message : "Content is temporarily unavailable.")).finally(() => setLoading(false)); }, []);
+  const visible = useMemo(() => filter === "all" ? items : items.filter((item) => item.content_type === filter), [filter, items]);
+  return <main className="shell"><nav className="nav"><Link className="brand" href="/">127SI CONTENT</Link><div className="navlinks"><Link href="/">Home</Link><Link href="/admin">Admin</Link></div></nav><section className="hero content-hero"><div className="eyebrow">Published library</div><h1>Resources for the work.</h1><p className="lead">Practical skill development, FBC Book readings, and moments worth celebrating.</p><div className="filter-row" aria-label="Filter content">{(Object.keys(labels) as Array<keyof typeof labels>).map((key) => <button className={`filter ${filter === key ? "active" : ""}`} key={key} onClick={() => setFilter(key)}>{labels[key]}</button>)}</div>{loading && <p className="muted">Loading published content…</p>}{error && <p className="notice error">{error}</p>}{!loading && !error && !visible.length && <p className="muted">No published content is available in this category yet.</p>}<div className="grid content-grid">{visible.map((item) => <ContentCard key={item.id} item={item} />)}</div></section></main>;
 }
+function ContentCard({ item }: { item: Item }) { const media = item.media?.[0]; const image = media && (media.media_type === "image" || media.mime_type?.startsWith("image/")) ? (media.public_url ?? media.url) : undefined; return <Link className="card content-card" href={`/content/${item.id}`}>{image ? <img className="card-media" src={image} alt={media?.alt_text || item.title} /> : <div className={`card-placeholder ${item.content_type}`} aria-hidden="true">{item.content_type === "shout_out" ? "★" : item.content_type === "tutorial" ? "→" : "Aa"}</div>}<div className="card-body"><div className="eyebrow">{labels[item.content_type]}</div><h2>{item.title}</h2><p className="muted">{item.short_description || item.description || "Open to explore this resource."}</p><span className="read-more">View resource →</span></div></Link>; }
