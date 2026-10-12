@@ -3,6 +3,11 @@ import { getSupabasePublic } from "@/lib/supabase";
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, paginationMeta, parseContentType, parsePositiveInt, publicContentResponse } from "@/lib/content-api";
 const CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
 
+function withMediaUrls(items: any[]) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return items.map((item) => ({ ...item, media: (item.media ?? []).map((asset: any) => ({ ...asset, public_url: asset.public_url?.startsWith("http") ? asset.public_url : base ? `${base}${asset.public_url ?? ""}` : asset.public_url })) }));
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const rawType = url.searchParams.get("type");
@@ -18,5 +23,5 @@ export async function GET(request: Request) {
   if (challengeId) query = query.contains("challenge_ids", [challengeId]);
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: "Unable to load published content" }, { status: 500 });
-  return NextResponse.json(publicContentResponse(data ?? [], paginationMeta(page, pageSize, count ?? 0)), { headers: CACHE_HEADERS });
+  return NextResponse.json(publicContentResponse(withMediaUrls(data ?? []), paginationMeta(page, pageSize, count ?? 0)), { headers: CACHE_HEADERS });
 }
