@@ -1,5 +1,25 @@
+"use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getSupabaseBrowser } from "@/lib/supabase-browser";
+
+type Item = { id: string; content_type: string; title: string; status: string };
 
 export default function AdminPage() {
-  return <main className="shell"><nav className="nav"><div className="brand">127SI ADMIN</div><a href="/">View site</a></nav><section className="hero"><div className="eyebrow">Content workspace</div><h1>Add content in minutes.</h1><p className="muted">Create a draft, attach media, and publish when ready.</p><Link className="button" href="/admin/new">New content</Link><div className="grid"><div className="card"><h2>Tutorials</h2><p className="muted">Add instruction, media, and coaching context.</p></div><div className="card"><h2>Readings</h2><p className="muted">Add an article, chapter, document, or link.</p></div><div className="card"><h2>Shout Outs</h2><p className="muted">Celebrate an athlete accomplishment with a story and media.</p></div></div></section></main>;
+  const [items, setItems] = useState<Item[]>([]); const [message, setMessage] = useState("");
+  async function load() {
+    const { data } = await getSupabaseBrowser().auth.getSession();
+    if (!data.session) { window.location.href = "/admin/login"; return; }
+    const response = await fetch("/api/admin/content", { headers: { Authorization: `Bearer ${data.session.access_token}` } });
+    if (response.status === 401) { window.location.href = "/admin/login"; return; }
+    const result = await response.json(); setItems(result.data ?? []);
+  }
+  useEffect(() => { void load(); }, []);
+  async function changeStatus(item: Item) {
+    const { data } = await getSupabaseBrowser().auth.getSession(); if (!data.session) return;
+    const status = item.status === "published" ? "unpublished" : "published"; setMessage("Updating...");
+    const response = await fetch(`/api/admin/content/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` }, body: JSON.stringify({ status }) });
+    setMessage(response.ok ? "Updated." : "Could not update item."); await load();
+  }
+  return <main className="shell"><nav className="nav"><div className="brand">127SI ADMIN</div><a href="/">View site</a></nav><section className="hero"><div className="eyebrow">Content workspace</div><h1>Manage your content.</h1><p className="muted">Create a draft, then publish it when ready.</p><Link className="button" href="/admin/new">New content</Link>{message && <p className="muted">{message}</p>}<div style={{display:"grid", gap:12, marginTop:28}}>{items.length === 0 ? <p className="muted">No content yet.</p> : items.map(item => <div className="card" key={item.id} style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:16}}><div><h2>{item.title}</h2><p className="muted">{item.content_type.replace("_", " ")} · {item.status}</p></div><button className="button" onClick={() => void changeStatus(item)} style={{border:0, cursor:"pointer"}}>{item.status === "published" ? "Unpublish" : "Publish"}</button></div>)}</div></section></main>;
 }

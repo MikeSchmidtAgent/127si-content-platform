@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   const publicClient = getSupabasePublic();
   const adminClient = getSupabaseAdmin();
   if (!publicClient || !adminClient) return NextResponse.json({ error: "Admin service is not configured" }, { status: 503 });
-  const { data: auth, error: authError } = await publicClient.auth.getUser(token);
+  const authClient = publicClient.auth as unknown as { getUser: (jwt: string) => Promise<{ data: { user: { id: string } | null }; error: Error | null }> };
+  const { data: auth, error: authError } = await authClient.getUser(token);
   if (authError || !auth.user) return NextResponse.json({ error: "Invalid authentication" }, { status: 401 });
   const parsed = contentSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -26,4 +27,16 @@ export async function POST(request: Request) {
   const { data, error } = await adminClient.from("content_items").insert({ ...input, created_by: auth.user.id }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data }, { status: 201 });
+}
+
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const publicClient = getSupabasePublic(); const adminClient = getSupabaseAdmin();
+  if (!token || !publicClient || !adminClient) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  const authClient = publicClient.auth as unknown as { getUser: (jwt: string) => Promise<{ data: { user: { id: string } | null }; error: Error | null }> };
+  const { data: auth, error: authError } = await authClient.getUser(token);
+  if (authError || !auth.user) return NextResponse.json({ error: "Invalid authentication" }, { status: 401 });
+  const { data, error } = await adminClient.from("content_items").select("id, content_type, title, status, visibility, created_at, published_at").order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data });
 }
