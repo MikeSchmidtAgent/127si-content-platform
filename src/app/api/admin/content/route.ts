@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSupabaseAdmin, getSupabasePublic } from "@/lib/supabase";
+import { authenticateContentAdmin } from "@/lib/admin-auth";
 
 const contentSchema = z.object({
   content_type: z.enum(["tutorial", "fbc_book", "shout_out"]),
@@ -12,31 +12,24 @@ const contentSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  const publicClient = getSupabasePublic();
-  const adminClient = getSupabaseAdmin();
-  if (!publicClient || !adminClient) return NextResponse.json({ error: "Admin service is not configured" }, { status: 503 });
-  const authClient = publicClient.auth as unknown as { getUser: (jwt: string) => Promise<{ data: { user: { id: string } | null }; error: Error | null }> };
-  const { data: auth, error: authError } = await authClient.getUser(token);
-  if (authError || !auth.user) return NextResponse.json({ error: "Invalid authentication" }, { status: 401 });
+  const auth = await authenticateContentAdmin(request);
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { adminClient, userId } = auth;
   const parsed = contentSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const input = parsed.data;
   if (input.content_type === "shout_out" && input.type_data.permission_confirmed !== true) return NextResponse.json({ error: "Shout Outs require permission confirmation" }, { status: 400 });
-  const { data, error } = await adminClient.from("content_items").insert({ ...input, created_by: auth.user.id }).select("id").single();
+  const { data, error } = await adminClient.from("content_items").insert({ ...input, created_by: userId }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data }, { status: 201 });
 }
 
 export async function GET(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const publicClient = getSupabasePublic(); const adminClient = getSupabaseAdmin();
-  if (!token || !publicClient || !adminClient) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  const authClient = publicClient.auth as unknown as { getUser: (jwt: string) => Promise<{ data: { user: { id: string } | null }; error: Error | null }> };
-  const { data: auth, error: authError } = await authClient.getUser(token);
-  if (authError || !auth.user) return NextResponse.json({ error: "Invalid authentication" }, { status: 401 });
+  const auth = await authenticateContentAdmin(request);
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const { adminClient } = auth;
   const { data, error } = await adminClient.from("content_items").select("id, content_type, title, status, visibility, created_at, published_at").order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
 }
+

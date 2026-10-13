@@ -1,21 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin, getSupabasePublic } from "@/lib/supabase";
+import { authenticateContentAdmin } from "@/lib/admin-auth";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-async function authenticate(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const publicClient = getSupabasePublic();
-  const adminClient = getSupabaseAdmin();
-  if (!token || !publicClient || !adminClient) return { error: "Authentication required", status: 401 as const };
-  const authClient = publicClient.auth as unknown as { getUser: (jwt: string) => Promise<{ data: { user: { id: string } | null }; error: Error | null }> };
-  const { data, error } = await authClient.getUser(token);
-  if (error || !data.user) return { error: "Invalid authentication", status: 401 as const };
-  return { userId: data.user.id, adminClient };
-}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await authenticate(request);
+  const auth = await authenticateContentAdmin(request);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { id: contentItemId } = await params;
   const { data: item, error: itemError } = await auth.adminClient.from("content_items").select("id").eq("id", contentItemId).maybeSingle();
@@ -37,3 +27,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (linkError) { await auth.adminClient.from("media_assets").delete().eq("id", asset.id); await auth.adminClient.storage.from("content-media").remove([storagePath]); return NextResponse.json({ error: linkError.message }, { status: 500 }); }
   return NextResponse.json({ data: asset }, { status: 201 });
 }
+
