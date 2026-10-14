@@ -6,6 +6,7 @@ import test from "node:test";
 // Exercise real route handlers and authorization, with only Auth/database and
 // NextResponse adapters replaced. A forbidden request cannot touch service_role.
 const root = new URL("../", import.meta.url);
+process.env.CONTENT_SECURE_PUBLISHING = "true";
 const state = { user: null as Record<string, unknown> | null, privilegedCalls: 0, rpcCalls: [] as unknown[], rpcError: null as unknown };
 Object.assign(globalThis, { contentRouteTest: state });
 registerHooks({

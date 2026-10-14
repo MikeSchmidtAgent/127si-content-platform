@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticateContentAdmin } from "@/lib/admin-auth";
+import { isSecurePublishingEnabled } from "@/lib/admin-authorization";
+import { applyLegacyContentStatus } from "@/lib/legacy-content-status";
 
 const editSchema = z.object({
   content_type: z.enum(["tutorial", "fbc_book", "shout_out"]),
@@ -30,8 +32,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!["published", "unpublished", "draft"].includes(body.status)) {
     return NextResponse.json({ error: "Invalid content status" }, { status: 400 });
   }
-  const { error } = await client.rpc("set_content_status", { p_content_id: id, p_status: body.status });
-  if (error) return NextResponse.json({ error: error.message }, { status: error.code === "P0002" ? 404 : error.code === "22023" ? 400 : 500 });
+  if (isSecurePublishingEnabled()) {
+    const { error } = await client.rpc("set_content_status", { p_content_id: id, p_status: body.status });
+    if (error) return NextResponse.json({ error: error.message }, { status: error.code === "P0002" ? 404 : error.code === "22023" ? 400 : 500 });
+    return NextResponse.json({ ok: true });
+  }
+  const legacy = await applyLegacyContentStatus(client, id, body.status);
+  if ("error" in legacy) return NextResponse.json({ error: legacy.error }, { status: legacy.status });
   return NextResponse.json({ ok: true });
 }
 

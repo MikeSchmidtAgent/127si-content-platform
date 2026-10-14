@@ -6,11 +6,11 @@
  */
 const base = (process.argv[2] ?? "https://content.fairfieldbasketballclub.com").replace(/\/$/, "");
 
-const expectations = [
-  { label: "all (via challenge+referee)", path: null, minTotal: 31 },
+const destinationExpectations = [
   { label: "challenge", path: "/api/v1/content?destination=challenge&page_size=1", total: 29 },
   { label: "referee", path: "/api/v1/content?destination=referee&page_size=1", total: 2 },
 ];
+const expectedCombinedTotal = 31;
 
 async function fetchTotal(path) {
   const res = await fetch(`${base}${path}`);
@@ -19,15 +19,20 @@ async function fetchTotal(path) {
 }
 
 let failed = false;
+const destinationTotals = [];
 
-for (const spec of expectations) {
-  if (spec.path) {
-    const { status, total, error } = await fetchTotal(spec.path);
-    const ok = status === 200 && total === spec.total;
-    console.log(`${ok ? "OK" : "FAIL"} ${spec.label}: HTTP ${status}, total=${total}${error ? ` (${error})` : ""}`);
-    if (!ok) failed = true;
-  }
+for (const spec of destinationExpectations) {
+  const { status, total, error } = await fetchTotal(spec.path);
+  destinationTotals.push(total ?? 0);
+  const ok = status === 200 && total === spec.total;
+  console.log(`${ok ? "OK" : "FAIL"} ${spec.label}: HTTP ${status}, total=${total}${error ? ` (${error})` : ""}`);
+  if (!ok) failed = true;
 }
+
+const combined = destinationTotals.reduce((sum, n) => sum + n, 0);
+const combinedOk = combined === expectedCombinedTotal;
+console.log(`${combinedOk ? "OK" : "FAIL"} combined (challenge+referee): total=${combined} (expected ${expectedCombinedTotal})`);
+if (!combinedOk) failed = true;
 
 const unscoped = await fetchTotal("/api/v1/content?page_size=1");
 if (unscoped.status === 400) {
