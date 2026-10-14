@@ -79,10 +79,10 @@ Audit events should be append-only and server-generated. They should be added as
 ## Before the first deployment
 
 1. Run locally:
-   - `pnpm typecheck`
-   - `pnpm lint`
-   - `pnpm test`
-   - `pnpm build`
+   - `npm run typecheck`
+   - `npm run lint`
+   - `npm test`
+   - `npm run build`
 2. Confirm the Supabase migrations have been run, including `0003_media_storage.sql`.
 3. Confirm the `content-media` Storage bucket exists.
 4. Confirm the admin user exists in Supabase Authentication.
