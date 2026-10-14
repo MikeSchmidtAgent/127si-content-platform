@@ -23,12 +23,12 @@ Challenge-Platform.
 ## Local commands
 
 ```text
-pnpm install
-pnpm dev
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+npm install
+npm run dev
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
 The production site is planned for `content.fairfieldbasketballclub.com`.
