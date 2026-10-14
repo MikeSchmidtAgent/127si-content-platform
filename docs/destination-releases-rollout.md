@@ -70,13 +70,9 @@ GET /api/v1/content/{id}?destination=challenge
 
 Those items were likely marked published (or imported) without creating revision snapshots. `published_destination_content` inner-joins `published_content`, so destination filtering cannot surface the other **30** releases until those items enter the published read model.
 
-**Owner decision required (pick one or combine):**
+**Remediation (repo):** Migration `supabase/migrations/0007_backfill_published_revisions.sql` backfills one published revision snapshot per legacy item from current `content_items` fields (same shape as admin publish). It is **idempotent** (skips items that already have a published revision), does **not** change `content_releases`, and does **not** update existing revision rows.
 
-1. **Backfill revisions** — For each published item missing revisions, insert a `content_revisions` snapshot from current item fields (or source import data) and set `published_at` (and item `published_at` if needed). Re-verify counts on `published_content` and `published_destination_content`.
-2. **Relax or replace the read model** — Change `published_content` (or add a Production-only view) so published items without revision history still resolve. Requires explicit product rules (which fields are authoritative when no snapshot exists).
-3. **Republish through admin/import** — Use flows that create revisions on publish going forward; bulk-republish legacy items.
-
-Until one of these is done, the Content API will return **one** item for both unscoped and destination-scoped reads, despite **31** release rows in `content_releases`.
+Until `0007` is applied in Production, the Content API returns **one** item for both unscoped and destination-scoped reads, despite **31** release rows in `content_releases`.
 
 **Verification queries (Production, read-only):**
 
@@ -99,7 +95,7 @@ where c.status = 'published'
 
 1. **Consumer apps ship first** — every Content API client adds `?destination=<name>` on list and detail reads (see [Consumer changes](#consumer-changes-required)).
 2. **Merge reconciled migration + API** — `0006_content_releases.sql` and `destination_key` filtering on `master` via PR.
-3. **Resolve published read model gap** — see [Runbook above](#runbook-why-published_content-shows-1-row-but-31-items-are-published) before expecting destination lists to match release counts.
+3. **Apply published read model backfill** — owner runs `0007_backfill_published_revisions.sql` in staging, then Production (see [Owner: backfill published revisions](#owner-backfill-published-revisions-staging--production)).
 4. **Owner applies migration in staging, then Production** — see [Owner: apply migration](#owner-apply-migration-staging--production). On Production, expect mostly policy/view/index reconciliation, not new tables.
 5. **Deploy Content app** — optional `destination` filtering uses `published_destination_content`.
 6. **Require destination (final)** — after Challenge and Referee production builds send `destination`, set `CONTENT_V1_REQUIRE_DESTINATION=true` and redeploy.
@@ -141,7 +137,7 @@ Set `CONTENT_PLATFORM_URL` (or existing base URL env) to the deployed Content se
 1. Review `supabase/migrations/0006_content_releases.sql` (Production-shaped `content_releases`, `published_destination_content`, RLS policy).
 2. In **staging** Supabase SQL editor or CLI: run pending migrations through `0006_content_releases.sql`.
 3. Confirm releases: `select destination_key, status, count(*) from content_releases group by 1, 2;`
-4. Confirm read model alignment: `select count(*) from published_content;` and `select count(*) from published_destination_content;` — investigate if release count ≫ view count (see runbook).
+4. Confirm read model alignment: `select count(*) from published_content;` and `select count(*) from published_destination_content;` — if release count ≫ view count, apply `0007` (see below).
 5. Staging smoke:
    - `GET /api/v1/content?destination=challenge`
    - `GET /api/v1/content?destination=referee`
@@ -152,11 +148,82 @@ Set `CONTENT_PLATFORM_URL` (or existing base URL env) to the deployed Content se
    - **Does not** insert or mutate existing `content_releases` rows.
 7. Do **not** set `CONTENT_V1_REQUIRE_DESTINATION=true` until consumers send `destination` and read-model counts match expectations.
 
+## Owner: backfill published revisions (staging → Production)
+
+Apply after `0006_content_releases.sql` (and after `0007` is merged to `master`). Use Supabase SQL editor or CLI; run the full file `supabase/migrations/0007_backfill_published_revisions.sql`.
+
+### Before apply (Production baseline, 2026-10-14)
+
+| Metric | Expected count |
+|--------|----------------|
+| `content_items` where `status = 'published'` | **31** |
+| `content_releases` where `status = 'published'` | **31** (29 `challenge`, 2 `referee`) |
+| `content_revisions` (all) | **1** |
+| `published_content` | **1** |
+| `published_destination_content` | **1** |
+| Published items without a published revision | **30** |
+
+### Apply
+
+```bash
+# From repo root, with Supabase CLI linked to the target project:
+supabase db push --include-all
+# Or paste/run only:
+# supabase/migrations/0007_backfill_published_revisions.sql
+```
+
+Safe to re-run: the `INSERT … SELECT` no-ops when every published item already has a revision with `published_at IS NOT NULL`.
+
+### After apply (expected)
+
+| Metric | Expected count |
+|--------|----------------|
+| `content_revisions` (all) | **31** (+30 new rows on first Production apply) |
+| `published_content` | **31** |
+| `published_destination_content` | **31** (all published releases are in-window) |
+| Published items without a published revision | **0** |
+| `content_releases` | **unchanged** (still **31** published rows) |
+
+### Verification queries
+
+```sql
+-- Row counts
+select count(*) as published_items from content_items where status = 'published';
+select count(*) as revisions_total from content_revisions;
+select count(*) as published_content_rows from published_content;
+select count(*) as published_destination_rows from published_destination_content;
+select destination_key, count(*) from content_releases where status = 'published' group by 1;
+
+-- Should return 0 after backfill
+select count(*) as published_without_revision
+from content_items c
+where c.status = 'published'
+  and not exists (
+    select 1 from content_revisions r
+    where r.content_item_id = c.id and r.published_at is not null
+  );
+
+-- Destination-scoped API parity (via view)
+select destination_key, count(*) from published_destination_content group by 1;
+-- Expected: challenge 29, referee 2
+```
+
+### What Production apply changes (data)
+
+- **`content_releases`:** no inserts, updates, or deletes.
+- **`content_revisions`:** inserts up to **30** new rows on first apply — one per legacy published item, snapshot copied from live `content_items` columns, `published_at` = `coalesce(content_items.published_at, now())`, `revision_number` = next number for that item (typically **1**). The existing **1** revision row is unchanged.
+- **Comments:** updates the table comment on `content_revisions` only.
+- **Views:** no DDL; `published_content` and `published_destination_content` definitions are unchanged — row counts increase because the backfilled revisions satisfy the join.
+
+### API smoke (after apply + Content app deploy unchanged)
+
+- `GET /api/v1/content` → **31** total (paginate if needed).
+- `GET /api/v1/content?destination=challenge` → **29** items.
+- `GET /api/v1/content?destination=referee` → **2** items.
+
 ### Migration numbering note
 
-Open PR #1 (`codex/swarm-secure-content-publishing`) also proposes a `0006_*` migration (`0006_atomic_publication.sql`). Only one file can be `0006` on `master`. Merge order:
-
-- If atomic publication merges first, renumber **this** migration to `0007_content_releases.sql` before merge, or merge destination releases first as `0006_content_releases.sql` and renumber atomic publication to `0007`.
+`0006_content_releases.sql` is on `master`. Open PR #1 (`codex/swarm-secure-content-publishing`) still proposes `0006_atomic_publication.sql`; if it merges later, renumber that file to **`0008_*`** (or the next free slot after `0007_backfill_published_revisions.sql`).
 
 ## Owner: assign / update destination releases (Production)
 
@@ -186,7 +253,7 @@ Leave staging unset until consumers are validated against staging Content.
 - [ ] Challenge PR merged and deployed with `destination=challenge`
 - [ ] Referee PR merged and deployed with `destination=referee`
 - [ ] Reconciled `0006_content_releases.sql` merged to `master`
-- [ ] Published read model gap understood / remediation chosen (see runbook)
+- [ ] `0007_backfill_published_revisions.sql` merged and applied staging → Production (see backfill runbook)
 - [ ] Migration applied staging → Production by owner
 - [ ] Release assignments reviewed (`destination_key` counts vs API smoke tests)
 - [ ] `CONTENT_V1_REQUIRE_DESTINATION=true` only after consumer deploy proof and read-model verification
