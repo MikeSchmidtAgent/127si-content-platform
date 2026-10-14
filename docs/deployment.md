@@ -111,7 +111,7 @@ After the hosting project is ready, add `content.fairfieldbasketballclub.com` as
 - Create a draft Shout Out.
 - Confirm it appears in `/admin`.
 - Publish it and confirm it appears in `/content`.
-- Confirm the public API responds at `/api/v1/content`.
+- Confirm the public API responds at `/api/v1/content` (with `destination` when required) and `/api/health` returns `{ "status": "ok" }`.
 - Upload one approved image or video and confirm it displays correctly.
 
 ## Runtime notes
