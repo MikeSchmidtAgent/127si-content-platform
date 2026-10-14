@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabasePublic } from "@/lib/supabase";
-import { DEFAULT_PAGE_SIZE, destinationQueryError, MAX_PAGE_SIZE, paginationMeta, parseContentType, parseDestination, parsePositiveInt, publicContentResponse, publishedContentSource, stripDestinationField } from "@/lib/content-api";
+import { DEFAULT_PAGE_SIZE, destinationFilterColumn, destinationQueryError, MAX_PAGE_SIZE, paginationMeta, parseContentType, parseDestination, parsePositiveInt, publicContentResponse, publishedContentSource, stripDestinationField } from "@/lib/content-api";
 const CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
 
 function withMediaUrls(items: any[]) {
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const supabase = getSupabasePublic();
   if (!supabase) return NextResponse.json({ error: "Content service is not configured" }, { status: 503, headers: CACHE_HEADERS });
   let query = supabase.from(publishedContentSource(destination)).select("*", { count: "exact" });
-  if (destination) query = query.eq("destination", destination);
+  if (destination) query = query.eq(destinationFilterColumn(), destination);
   query = query.order("published_at", { ascending: false }).order("id", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
   if (type) query = query.eq("content_type", type);
   if (challengeId) query = query.contains("challenge_ids", [challengeId]);

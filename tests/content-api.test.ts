@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CONTENT_DESTINATIONS, destinationQueryError, MAX_PAGE_SIZE, paginationMeta, parseContentType, parseDestination, parsePositiveInt, publishedContentSource } from "../src/lib/content-api.ts";
+import { CONTENT_DESTINATIONS, destinationFilterColumn, destinationQueryError, MAX_PAGE_SIZE, paginationMeta, parseContentType, parseDestination, parsePositiveInt, publishedContentSource } from "../src/lib/content-api.ts";
 
 test("pagination metadata is stable and complete", () => {
   assert.deepEqual(paginationMeta(2, 10, 25), { page: 2, page_size: 10, total: 25, total_pages: 3, has_next_page: true, has_previous_page: true });
@@ -35,7 +35,8 @@ test("destinations are explicit and normalized", () => {
 
 test("published content source follows destination filter", () => {
   assert.equal(publishedContentSource(null), "published_content");
-  assert.equal(publishedContentSource("challenge"), "published_content_by_destination");
+  assert.equal(publishedContentSource("challenge"), "published_destination_content");
+  assert.equal(destinationFilterColumn(), "destination_key");
 });
 
 test("destination query validation respects rollout flag", () => {
