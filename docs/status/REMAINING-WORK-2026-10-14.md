@@ -45,9 +45,9 @@ Each item includes a one-line **why**.
 
 | # | Work | Why |
 |---|------|-----|
-| A1 | **Fix admin “System status” when `CONTENT_V1_REQUIRE_DESTINATION=true`** — health check must not call `/api/v1/content` without `destination`. | Admins otherwise see a false “API down” while Production is healthy. |
-| A2 | **Add `/api/health` (or extend status)** — lightweight configured + DB read check without destination. | Matches deployment checklist and avoids coupling ops UI to consumer query params. |
-| A3 | **Optional: `scripts/verify-content-api-destinations.mjs`** — assert totals 31 / 29 / 2 for a given base URL. | Repeatable verification before/after deploys without manual curl. |
+| A1 | ~~Fix admin System status~~ — **PR #7**; `/admin/status` probes `/api/health`. | Admins no longer see false “API down” when destination is required. |
+| A2 | ~~Add `/api/health`~~ — **PR #7**; configured + `published_content` count, no destination. | Ops UI decoupled from consumer query params. |
+| A3 | ~~`scripts/verify-content-api-destinations.mjs`~~ — **PR #7** + **PR #9** (combined 31 = 29+2). | Repeatable pre/post-deploy verification. |
 | A4 | ~~**Resolve PR #1**~~ — merged as **PR #8** (`0008_atomic_publication.sql`); **PR #1** closed in favor of #8; **`CONTENT_SECURE_PUBLISHING`** defaults off so deploy does not lock admins. | Slot `0006`/`0007` are taken in Production; flag gates scoped admin until owner assigns roles + applies 0008. |
 | A5 | ~~Wire admin routes to `set_content_status` + scoped checks~~ — behind **`CONTENT_SECURE_PUBLISHING=true`** (same flag as A4 gate). | Prevents forged metadata publish when owner enables hardening. |
 | A6 | **Consumer repos (outside this workspace):** Challenge + Referee must send `?destination=` on all v1 reads. | Required destination is already on in Production; clients without the param get **400**. |
@@ -64,8 +64,8 @@ Each item includes a one-line **why**.
 | B2 | **Challenge (`127si-shooting-challenge`):** merge/deploy client that sets `destination=challenge` on every Content API call. | Production already rejects unscoped list/detail requests. |
 | B3 | **Referee (`127-si-jr-ref`):** same with `destination=referee`. | Referee catalog is only 2 items today; without the param the app cannot load them. |
 | B4 | **Confirm Vercel Production env:** `CONTENT_V1_REQUIRE_DESTINATION=true` only after B2–B3 are live (already appears true — verify consumer apps before changing). | Avoids locking out apps that still omit `destination`. |
-| B5 | **If merging PR #1 / `0008`:** assign Supabase Auth **`app_metadata.content_admin`** (or approved pattern) for each admin **before** deploy. | RPC + scoped admin gate will return **403** for users without the flag. |
-| B6 | **If merging `0008`:** run `0008_atomic_publication.sql` in **staging → Production** (owner SQL/CLI); do not duplicate `0006`/`0007`. | Installs atomic publish RPC and view refresh without re-running backfill. |
+| B5 | **Before `CONTENT_SECURE_PUBLISHING=true`:** assign Supabase Auth **`app_metadata.content_admin`** for each admin (see [`secure-publishing-rollout.md`](../secure-publishing-rollout.md)). | Scoped gate returns **403** without the claim when the flag is on. |
+| B6 | **Before the flag:** run `0008_atomic_publication.sql` in **staging → Production** (owner SQL/CLI); do not duplicate `0006`/`0007`. | Installs atomic publish RPC; required for RPC path when flag is on. |
 | B7 | **Review Production `content_releases` assignments** when adding items (SQL/admin); agents must not bulk-edit Production releases. | Wrong `destination_key` ships content to the wrong app. |
 | B8 | **DNS / Vercel smoke** per [`docs/deployment.md`](../deployment.md) after deploys. | Confirms custom domain and env vars match the tested build. |
 
@@ -91,6 +91,7 @@ Each item includes a one-line **why**.
 
 | Kind | # | Title / note |
 |------|---|----------------|
-| PR | **#1** | Secure scoped admins + atomic publication — **OPEN**, migration number conflict |
+| PR | **#1** | Secure scoped admins + atomic publication — **CLOSED** (superseded by **#8** + **#9**) |
+| PR | **#6–#9** | Remaining-work doc, health/verify, atomic **0008**, secure-publishing flag — **MERGED** |
 | PR | #2–#5 | Destination rollout, npm, reconciled `0006`, `0007` — **MERGED** |
 | Issues | — | No open issues in repo at time of writing |
