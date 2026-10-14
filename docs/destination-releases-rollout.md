@@ -55,24 +55,24 @@ GET /api/v1/content?destination=referee&page=1&page_size=20
 GET /api/v1/content/{id}?destination=challenge
 ```
 
-## Runbook: why `published_content` shows 1 row but 31 items are “published”
+## Runbook: legacy “1 row in views, 31 published” gap (resolved in Production)
 
-**Symptom (Production, 2026-10-14):**
+**Historical symptom (Production, 2026-10-14 before `0007`):** `published_content` and `published_destination_content` each showed **1** row while `content_releases` had **31** published rows.
+
+**Cause:** `published_content` only includes items with a `content_revisions` row that has `published_at IS NOT NULL`. Most legacy published items had no revision snapshot, so they were excluded from destination-scoped reads.
+
+**Remediation:** `supabase/migrations/0007_backfill_published_revisions.sql` (merged on `master`, applied in Production as migration `backfill_published_revisions`).
+
+**Current Production baseline (2026-10-14, after `0007`):**
 
 | Query | Row count |
 |-------|-----------|
 | `content_items` where `status = 'published'` | **31** |
-| `content_releases` where `status = 'published'` | **31** |
-| `published_content` | **1** |
-| `published_destination_content` | **1** |
+| `content_releases` where `status = 'published'` | **31** (29 `challenge`, 2 `referee`) |
+| `published_content` | **31** |
+| `published_destination_content` | **31** |
 
-**Cause:** `published_content` (migration `0004_published_snapshot_media_links.sql`) only includes items that have at least one `content_revisions` row with `published_at IS NOT NULL`, joined as the latest such revision. Production has **only one** row in `content_revisions` total. **30** published `content_items` have **no** revision rows, so they never appear in `published_content`.
-
-Those items were likely marked published (or imported) without creating revision snapshots. `published_destination_content` inner-joins `published_content`, so destination filtering cannot surface the other **30** releases until those items enter the published read model.
-
-**Remediation (repo):** Migration `supabase/migrations/0007_backfill_published_revisions.sql` backfills one published revision snapshot per legacy item from current `content_items` fields (same shape as admin publish). It is **idempotent** (skips items that already have a published revision), does **not** change `content_releases`, and does **not** update existing revision rows.
-
-Until `0007` is applied in Production, the Content API returns **one** item for both unscoped and destination-scoped reads, despite **31** release rows in `content_releases`.
+API smoke: `?destination=challenge` → **29**; `?destination=referee` → **2**. Production deploy also enforces required `destination` on unscoped list requests (**400** without the parameter).
 
 **Verification queries (Production, read-only):**
 
@@ -252,8 +252,8 @@ Leave staging unset until consumers are validated against staging Content.
 
 - [ ] Challenge PR merged and deployed with `destination=challenge`
 - [ ] Referee PR merged and deployed with `destination=referee`
-- [ ] Reconciled `0006_content_releases.sql` merged to `master`
-- [ ] `0007_backfill_published_revisions.sql` merged and applied staging → Production (see backfill runbook)
-- [ ] Migration applied staging → Production by owner
-- [ ] Release assignments reviewed (`destination_key` counts vs API smoke tests)
-- [ ] `CONTENT_V1_REQUIRE_DESTINATION=true` only after consumer deploy proof and read-model verification
+- [x] Reconciled `0006_content_releases.sql` merged to `master`
+- [x] `0007_backfill_published_revisions.sql` merged and applied Production (read-model counts verified)
+- [x] Migration applied Production (`content_releases`, `backfill_published_revisions` in Supabase history)
+- [x] Release assignments vs API smoke (`29` / `2` / `31` total in views)
+- [x] `CONTENT_V1_REQUIRE_DESTINATION=true` on Production Content deploy (confirm consumer apps before changing staging)
