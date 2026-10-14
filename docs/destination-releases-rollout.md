@@ -223,7 +223,7 @@ select destination_key, count(*) from published_destination_content group by 1;
 
 ### Migration numbering note
 
-`0006_content_releases.sql` is on `master`. Open PR #1 (`codex/swarm-secure-content-publishing`) still proposes `0006_atomic_publication.sql`; if it merges later, renumber that file to **`0008_*`** (or the next free slot after `0007_backfill_published_revisions.sql`).
+Atomic publication hardening is `0008_atomic_publication.sql` (renumbered from former PR #1 `0006_atomic_publication.sql`).
 
 ## Owner: assign / update destination releases (Production)
 
