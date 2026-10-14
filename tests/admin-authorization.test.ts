@@ -6,7 +6,16 @@ const failureStatus = (result: Awaited<ReturnType<typeof verifyContentAdmin>>) =
 const request = (header = "Bearer verified-token") => new Request("https://content.test", { headers: { authorization: header } });
 const client = (user: Record<string, unknown> | null, error: unknown = null) => ({ auth: { getUser: async () => ({ data: { user: user as { id: string } | null }, error }) } });
 
+test("legacy mode accepts any verified user when CONTENT_SECURE_PUBLISHING is off", async () => {
+  const previous = process.env.CONTENT_SECURE_PUBLISHING;
+  delete process.env.CONTENT_SECURE_PUBLISHING;
+  assert.deepEqual(await verifyContentAdmin(request(), client({ id: "legacy-admin" })), { userId: "legacy-admin" });
+  if (previous === undefined) delete process.env.CONTENT_SECURE_PUBLISHING;
+  else process.env.CONTENT_SECURE_PUBLISHING = previous;
+});
+
 test("requires a bearer token, verified identity, and server-owned content role", async () => {
+  process.env.CONTENT_SECURE_PUBLISHING = "true";
   for (const header of ["", "token", "Basic verified-token", "Bearer ", "Bearer a b"]) {
     assert.equal(failureStatus(await verifyContentAdmin(request(header), client({ id: "u" }))), 401);
   }
@@ -19,14 +28,17 @@ test("requires a bearer token, verified identity, and server-owned content role"
     { id: "u", is_anonymous: true, app_metadata: { content_admin: true } },
   ]) assert.equal(failureStatus(await verifyContentAdmin(request(), client(user))), 403);
   assert.deepEqual(await verifyContentAdmin(request(), client({ id: "admin", app_metadata: { content_admin: true } })), { userId: "admin" });
+  delete process.env.CONTENT_SECURE_PUBLISHING;
 });
 
 test("role revocation is rechecked on every request", async () => {
+  process.env.CONTENT_SECURE_PUBLISHING = "true";
   let user = { id: "admin", app_metadata: { content_admin: true } };
   const auth = { auth: { getUser: async () => ({ data: { user }, error: null }) } };
   assert.deepEqual(await verifyContentAdmin(request(), auth), { userId: "admin" });
   user = { ...user, app_metadata: { content_admin: false } };
   assert.equal(failureStatus(await verifyContentAdmin(request(), auth)), 403);
+  delete process.env.CONTENT_SECURE_PUBLISHING;
 });
 
 test("configuration and Auth outages fail closed", async () => {

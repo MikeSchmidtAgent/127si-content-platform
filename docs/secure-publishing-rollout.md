@@ -1,12 +1,47 @@
 # Secure publishing rollout
 
-This change is prepared against upstream `master` at `108e58dc9b11596d3f145053357c156dec0e1d98`. The default branch is README-only; confirm the hosting source separately. No hosted migration, account-role assignment, deployment, storage visibility change, or branch administration was performed.
+Code on `master` ships **scoped admin + atomic publish behind `CONTENT_SECURE_PUBLISHING`**. When that env var is **unset or not `true`**, admin routes keep the pre-hardening behavior: any valid Supabase session can use the admin API, and publish/unpublish uses the legacy revision + status update path. Production stays on legacy behavior until the owner completes the steps below and sets `CONTENT_SECURE_PUBLISHING=true` on Vercel.
 
-## Authorization prerequisite
+No hosted migration, account-role assignment, deployment, storage visibility change, or branch administration was performed by agents.
 
-Every content and asset admin API now requires a freshly verified Supabase user with **server-owned `app_metadata.content_admin` exactly `true`**, and rejects anonymous users. Ordinary authenticated accounts and client-editable `user_metadata` cannot authorize privileged access. No generic cross-platform `role=admin` claim is accepted. Supabase `getUser(token)` retrieves current metadata each request, so revocation is observed without relying on stale decoded JWT claims.
+## Rollout flag
 
-Before deployment, have the owner review the approved content administrators and explicitly assign this scoped app metadata using a trusted administrative operation. Preserve their other metadata. This code does not assign or bootstrap roles. Deploying before assignments intentionally denies all existing accounts lacking the claim.
+| Variable | Default | When `true` |
+|----------|---------|-------------|
+| `CONTENT_SECURE_PUBLISHING` | off (legacy) | Requires `app_metadata.content_admin === true`; publish/unpublish calls `set_content_status` RPC (requires migration **0008**). |
+
+## Owner steps (click-by-click)
+
+Do these **before** setting `CONTENT_SECURE_PUBLISHING=true` in Production.
+
+### 1. Assign `content_admin` for each admin user (Supabase Dashboard)
+
+1. Open [Supabase Dashboard](https://supabase.com/dashboard) and select project **`oqnnvmxjdersgcguhvsc`** (Content Platform).
+2. Go to **Authentication** → **Users**.
+3. Click the email of each person who should manage content.
+4. Scroll to **Raw User Meta Data** / **App Metadata** (use **App Metadata** — not User Metadata).
+5. Edit **App Metadata** JSON and set `"content_admin": true` (merge with existing keys; do not remove other app metadata).
+6. Click **Save**.
+7. Repeat for every admin account.
+
+### 2. Apply migration `0008_atomic_publication.sql`
+
+1. In Supabase Dashboard → **SQL Editor** → **New query**.
+2. Open `supabase/migrations/0008_atomic_publication.sql` from this repo (on `master`).
+3. Paste the full file into the editor.
+4. Run against **staging** first; run `npm test` with `CONTENT_TEST_DATABASE_URL` pointed at staging if available.
+5. When staging looks good, run the same SQL in **Production** (one transaction; do not re-run `0006` or `0007`).
+
+### 3. Enable scoped admin + atomic publish (Vercel)
+
+1. Open [Vercel](https://vercel.com) → Content Platform project → **Settings** → **Environment Variables**.
+2. Add **`CONTENT_SECURE_PUBLISHING`** = **`true`** for **Production** (and Preview if desired).
+3. **Redeploy** Production from the latest `master` build.
+4. Sign in to admin, publish a test draft, confirm public API still serves content.
+
+## Authorization (when flag is on)
+
+Every content and asset admin API requires a freshly verified Supabase user with **server-owned `app_metadata.content_admin` exactly `true`**, and rejects anonymous users. Ordinary authenticated accounts and client-editable `user_metadata` cannot authorize privileged access. Supabase `getUser(token)` retrieves current metadata each request, so revocation is observed without relying on stale decoded JWT claims.
 
 ## Migration and publishing prerequisite
 

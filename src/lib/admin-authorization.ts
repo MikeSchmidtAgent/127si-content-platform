@@ -1,8 +1,13 @@
 type VerifiedUser = { id: string; app_metadata?: Record<string, unknown>; is_anonymous?: boolean };
+
+/** When true, admin APIs require app_metadata.content_admin and publish via set_content_status (0008). */
+export function isSecurePublishingEnabled(): boolean {
+  return process.env.CONTENT_SECURE_PUBLISHING === "true";
+}
 type AuthClient = { auth: { getUser(token: string): Promise<{ data: { user: VerifiedUser | null }; error: unknown }> } };
 
 // getUser asks Auth for current, server-owned metadata; do not authorize from
-// client-editable user_metadata or locally decoded JWT claims.
+// client-editable user_metadata or locally decoded JWT claims when scoped mode is on.
 export type AuthorizationFailure = { error: string; status: 401 | 403 | 503 };
 
 export async function verifyContentAdmin(request: Request, client: AuthClient | null): Promise<AuthorizationFailure | { userId: string }> {
@@ -12,8 +17,10 @@ export async function verifyContentAdmin(request: Request, client: AuthClient | 
   try {
     const { data, error } = await client.auth.getUser(token);
     if (error || !data.user) return { error: "Invalid authentication", status: 401 as const };
-    if (data.user.is_anonymous || data.user.app_metadata?.content_admin !== true) {
-      return { error: "Content administrator access required", status: 403 as const };
+    if (isSecurePublishingEnabled()) {
+      if (data.user.is_anonymous || data.user.app_metadata?.content_admin !== true) {
+        return { error: "Content administrator access required", status: 403 as const };
+      }
     }
     return { userId: data.user.id };
   } catch {
