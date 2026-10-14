@@ -8,7 +8,9 @@ Base URL (local): `http://localhost:3000/api/v1`
 
 `GET /content`
 
-Optional query parameters: `type` (`tutorial`, `fbc_book`, `shout_out`), `challenge_id`, `page` (default `1`), and `page_size` (`1`–`50`, default `20`).
+Optional query parameters: `type` (`tutorial`, `fbc_book`, `shout_out`), `challenge_id`, `destination` (`challenge`, `referee`), `page` (default `1`), and `page_size` (`1`–`50`, default `20`).
+
+`destination` scopes results to content released for that consumer. During rollout it is optional; when the Content service sets `CONTENT_V1_REQUIRE_DESTINATION=true`, `destination` becomes required on list and detail routes. See [destination-releases-rollout.md](./destination-releases-rollout.md).
 
 Results are ordered newest published first, with the content ID as a stable tie-breaker.
 
@@ -36,7 +38,7 @@ The content fields in the response, including visibility, come from the latest p
 
 ## Get one published item
 
-`GET /content/:id` returns `{ "data": { ... } }`. An unpublished, draft, removed, or unknown ID returns `404` with `{ "error": "Content not found" }`.
+`GET /content/:id` returns `{ "data": { ... } }`. Optional query: `destination` (`challenge`, `referee`) with the same rollout rules as the list endpoint. An unpublished, draft, removed, unknown ID, or missing destination release returns `404` with `{ "error": "Content not found" }`.
 
 ## Errors and caching
 
