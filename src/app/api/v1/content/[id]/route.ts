@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { destinationQueryError, parseDestination, publishedContentSource, stripDestinationField } from "@/lib/content-api";
+import { destinationFilterColumn, destinationQueryError, parseDestination, publishedContentSource, stripDestinationField } from "@/lib/content-api";
 import { getSupabasePublic } from "@/lib/supabase";
 const CACHE_HEADERS = { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" };
 
@@ -13,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const supabase = getSupabasePublic();
   if (!supabase) return NextResponse.json({ error: "Content service is not configured" }, { status: 503, headers: CACHE_HEADERS });
   let query = supabase.from(publishedContentSource(destination)).select("*").eq("id", id);
-  if (destination) query = query.eq("destination", destination);
+  if (destination) query = query.eq(destinationFilterColumn(), destination);
   const { data, error } = await query.maybeSingle();
   if (error) return NextResponse.json({ error: "Unable to load published content" }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Content not found" }, { status: 404 });

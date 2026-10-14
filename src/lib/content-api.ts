@@ -23,11 +23,25 @@ export function destinationQueryError(rawDestination: string | null, destination
   return null;
 }
 export function stripDestinationField<T extends Record<string, unknown>>(row: T) {
-  const { destination: _destination, destination_released_at: _releasedAt, ...rest } = row;
+  const {
+    destination: _legacyDestination,
+    destination_key: _destinationKey,
+    destination_released_at: _legacyReleasedAt,
+    release_id: _releaseId,
+    release_featured: _releaseFeatured,
+    release_display_order: _releaseDisplayOrder,
+    release_starts_at: _releaseStartsAt,
+    release_ends_at: _releaseEndsAt,
+    release_published_at: _releasePublishedAt,
+    ...rest
+  } = row;
   return rest;
 }
 export function publishedContentSource(destination: ContentDestination | null) {
-  return destination ? "published_content_by_destination" : "published_content";
+  return destination ? "published_destination_content" : "published_content";
+}
+export function destinationFilterColumn() {
+  return "destination_key" as const;
 }
 export function parsePositiveInt(value: string | null, fallback: number, max?: number) {
   if (value === null || !/^\d+$/.test(value)) return fallback;
